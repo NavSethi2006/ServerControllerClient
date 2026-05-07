@@ -3,7 +3,7 @@ import hashlib
 import threading
 from PySide6.QtCore import Qt, QTimer
 
-SERVER_IP = "192.168.2.74"
+SERVER_IP = "10.82.81.56"
 SERVER_PORT = 31159
 
 def server_AUTH(password):
@@ -31,16 +31,18 @@ def server_AUTH(password):
 
         # Step 2: Compute hash of password + challenge
         server_hash = challenge.split(" ")[1]
-        server_hash = server_hash.strip()
-        client_hash = hashlib.sha256((password + server_hash).encode()).hexdigest()
+        server_hash = server_hash.lstrip()
+        print(f"hashing {password+server_hash}")
+        client_hash = hashlib.sha256((password+server_hash).encode()).hexdigest()
 
         # Step 3: Send the computed hash
-        s.sendall(f"AUTH {client_hash}\n".encode())
-        print("Sent computed hash")
+
+        s.sendall(f"AUTH {client_hash}".encode())
+        print(f"Sent computed hash {client_hash}")
 
         # Step 4: Wait for server response
         response = s.recv(1024).decode().strip()
-        print(f"Server response: {response}")
+        print(f"Authentication response: {response}")
 
         if response == "OK":
             print("Authentication successful")

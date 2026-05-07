@@ -114,16 +114,12 @@ class App(QWidget):
         self.timer.stop()
         if self.current_result == 0:
             self.error.setText("Successful Connection")
-            print("suck1")
             self.stack.setCurrentWidget(self.dashboard)
         elif self.current_result == 1:
-            print("suck2")
             self.error.setText("Error with the server, try again later")
         elif self.current_result == 2:
-            print("suck3")
             self.error.setText("Wrong password, try again in 30 seconds")
         elif self.current_result == 3:
-            print("suck4")
             self.error.setText("Error with server, restart the program and try again")
 
     # 🎨 STYLE

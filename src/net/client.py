@@ -1,62 +1,68 @@
 import socket
 import hashlib
 import threading
-from PySide6.QtCore import Qt, QTimer
 
-SERVER_IP = "10.82.81.56"
+SERVER_IP = ""
 SERVER_PORT = 31159
+MCSERVERIP = ""
+MCSERVERPORT = 25565
 
-def server_AUTH(password):
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(10)  # Set a timeout to avoid hanging
 
-        s.connect((SERVER_IP, SERVER_PORT))
-        print("Connected to server")
+class client:
+        
+    def server_AUTH(self, password):
+        try:
+            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.s.connect((SERVER_IP, SERVER_PORT))
 
-        # Step 1: Receive the challenge
-        challenge = ""
-        while True:
-            data = s.recv(1024).decode().strip()
-            if not data:
-                break
-            challenge = data
-            print(f"Received challenge: {challenge}")
-            if challenge.startswith("CHALLENGE"):
-                break
+            challenge = ""
+            while True:
+                data = self.s.recv(1024).decode().strip()
+                if not data:
+                    break
+                challenge = data
+                if challenge.startswith("CHALLENGE"):
+                    break
+            if not challenge.startswith("CHALLENGE"):
+                return 1
 
-        if not challenge.startswith("CHALLENGE"):
-            print("Invalid challenge received")
-            return 1  # Invalid challenge
+            server_hash = challenge.split(" ")[1]
+            server_hash = server_hash.lstrip()
+            client_hash = hashlib.sha256((password+server_hash).encode()).hexdigest()
 
-        # Step 2: Compute hash of password + challenge
-        server_hash = challenge.split(" ")[1]
-        server_hash = server_hash.lstrip()
-        print(f"hashing {password+server_hash}")
-        client_hash = hashlib.sha256((password+server_hash).encode()).hexdigest()
+            self.s.sendall(f"AUTH {client_hash}".encode())
 
-        # Step 3: Send the computed hash
+            response = self.s.recv(1024).decode().strip()
+            if response == "OK":
+                return 0
+            elif response == "FAIL":
+                self.close_conn()
+                return 2
+            else:
+                return 1
+        except socket.error as e:
+            print(f"Socket error: {e}")
+            return 1
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return 3
+         
+    def send_start(self):
+        self.s.sendall("START".encode())
 
-        s.sendall(f"AUTH {client_hash}".encode())
-        print(f"Sent computed hash {client_hash}")
+    def send_stop(self):
+        self.s.sendall("STOP".encode())
+        result = self.s.recv(1).decode().strip()
+        return result
 
-        # Step 4: Wait for server response
-        response = s.recv(1024).decode().strip()
-        print(f"Authentication response: {response}")
+    def check_online(self) -> bool:
+        try:
+            with socket.create_connection((MCSERVERIP, MCSERVERPORT)):
+                return True
+        except (OSError, socket.timeout):
+            return False
+    
+    def close_conn(self):
+        self.s.close()
 
-        if response == "OK":
-            print("Authentication successful")
-            return 0  # Authentication successful
-        elif response == "FAIL":
-            print("Authentication failed")
-            return 2  # Wrong password
-        else:
-            print(f"Unexpected server response: {response}")
-            return 1  # Unexpected response
 
-    except socket.error as e:
-        print(f"Socket error: {e}")
-        return 1  # Socket error
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        return 3  # General error

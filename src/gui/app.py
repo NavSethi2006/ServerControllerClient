@@ -2,25 +2,53 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel,
     QLineEdit, QPushButton, QTextEdit, QStackedLayout, QFrame
 )
-from PySide6.QtCore import QTimer, Qt
-from net.client import server_AUTH
+from PySide6.QtCore import QTimer, Qt, QObject, Signal
+from net.client import client
 import threading
+
+
+class StatusWorker(QObject):
+    finished = Signal(bool)
+
+    def __init__(self, client_obj):
+        super().__init__()
+        self.client = client_obj
+
+    def run(self):
+        try:
+            result = self.client.check_online()
+            self.finished.emit(result)
+        except Exception:
+            self.finished.emit(False)
+
 
 class App(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MC Control")
         self.resize(400, 500)
+
         self.current_result = None
-        self.timer = QTimer(self)
-        self.timer.setInterval(1000)
+        self.client = client()
+
         self.stack = QStackedLayout()
         self.login_page = self.build_login()
         self.dashboard = self.build_dashboard()
+
         self.stack.addWidget(self.login_page)
         self.stack.addWidget(self.dashboard)
+
         self.setLayout(self.stack)
         self.setStyleSheet(self.styles())
+
+        # status timer
+        self.status_timer = QTimer(self)
+        self.status_timer.setInterval(1000)
+        self.status_timer.timeout.connect(self.update_status)
+        self.status_timer.start()
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(1000)
 
     def build_login(self):
         container = QWidget()
@@ -29,6 +57,7 @@ class App(QWidget):
 
         card = QFrame()
         card.setObjectName("card")
+
         layout = QVBoxLayout()
 
         title = QLabel("MC CONTROL")
@@ -71,23 +100,39 @@ class App(QWidget):
 
         start = QPushButton("START")
         stop = QPushButton("STOP")
-        wol = QPushButton("WAKE")
 
-        start.clicked.connect(lambda: self.send("START"))
-        stop.clicked.connect(lambda: self.send("STOP"))
-        wol.clicked.connect(lambda: self.send("WOL"))
+        start.clicked.connect(self.on_start)
+        stop.clicked.connect(self.on_stop)
 
         layout.addWidget(self.status)
         layout.addWidget(start)
         layout.addWidget(stop)
-        layout.addWidget(wol)
         layout.addWidget(self.log)
 
         container.setLayout(layout)
         return container
 
+    def on_start(self):
+        self.log.append("Starting server...")
+        try:
+            self.client.send_start()
+            self.log.append(f"Server attempting to start started. Check the top left of the screen to see if its on in the next 30 seconds. If not then contact Navin")
+        except Exception as e:
+            self.log.append(f"Error starting server: {str(e)}")
+
+    def on_stop(self):
+        self.log.append("Stopping server...")
+        try:
+            result = self.client.send_stop()
+            if(result == "0"):
+                self.log.append(f"Server stopped successfully: {result}")
+            else:
+                self.log.append(f"Server failed to stop probably cuz its already offline: {result}")
+        except Exception as e:
+            self.log.append(f"Error stopping server: {str(e)}")
     def do_login(self):
         pwd = self.password.text()
+
         if not pwd:
             self.error.setText("Enter password")
             return
@@ -95,15 +140,12 @@ class App(QWidget):
         self.error.setText("Connecting...")
         self.current_result = None
 
-        # Start a thread to run server_AUTH
         def thread_target():
-            result = server_AUTH(pwd)
-            self.current_result = result  # Assign result to the main class
+            result = self.client.server_AUTH(pwd)
+            self.current_result = result
 
         threading.Thread(target=thread_target, daemon=True).start()
 
-        # Set up a QTimer to call check_result every second
-        self.timer = QTimer()
         self.timer.timeout.connect(self.check_result)
         self.timer.start(1000)
 
@@ -112,17 +154,38 @@ class App(QWidget):
             return
 
         self.timer.stop()
+
         if self.current_result == 0:
             self.error.setText("Successful Connection")
             self.stack.setCurrentWidget(self.dashboard)
+
         elif self.current_result == 1:
-            self.error.setText("Error with the server, try again later")
+            self.error.setText("Error with the server, it is highly likely someone else is connected. Try again later")
+
         elif self.current_result == 2:
             self.error.setText("Wrong password, try again in 30 seconds")
-        elif self.current_result == 3:
-            self.error.setText("Error with server, restart the program and try again")
 
-    # 🎨 STYLE
+        elif self.current_result == 3:
+            self.error.setText("Error with server, it is highly likely someone else is connected. Restart the program and try again")
+
+    def update_status(self):
+        worker = StatusWorker(self.client)
+
+        def run():
+            worker.run()
+
+        worker.finished.connect(self.on_status_result)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def on_status_result(self, is_online):
+        if is_online:
+            self.status.setText("● CONNECTED")
+            self.status.setStyleSheet("color: #4caf50; font-weight: bold;")
+        else:
+            self.status.setText("● DISCONNECTED")
+            self.status.setStyleSheet("color: red; font-weight: bold;")
+
     def styles(self):
         return """
         QWidget {

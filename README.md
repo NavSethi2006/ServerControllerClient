@@ -6,6 +6,7 @@ A lightweight remote Minecraft server controller built with:
 - Cross-platform GUI client
 
 Designed for my friends to remotely controlling a Minecraft server running on a different computer.
+**BE ADVISED THAT ONLY ONE CLIENT CAN BE CONNECTED AT A TIME**
 
 ---
 

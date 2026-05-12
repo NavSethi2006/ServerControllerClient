@@ -92,7 +92,7 @@ class App(QWidget):
         container = QWidget()
         layout = QVBoxLayout()
 
-        self.status = QLabel("● CONNECTED")
+        self.status = QLabel("")
         self.status.setObjectName("status")
 
         self.log = QTextEdit()
